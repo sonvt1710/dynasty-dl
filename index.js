@@ -26,6 +26,7 @@ const argv = require('commander')
 	.option('-p, --pdf', 'Downloads pdf instead of seperated images.')
 	.option('-n, --noconvert', 'Skips PNG to PDF coversion.')
 	.option('-v, --verbose', 'Includes progressbar for each GET request and PDF conversion.')
+  .option('-r, --reDownloadChapter', 'Redownload all chapters included downloaded', undefined, false)
 	.parse(process.argv)
 if(!argv.args[0]) argv.help()
 
@@ -49,8 +50,8 @@ async function parseManga(manga) {
 	let main = JSON.parse(initialJSON), name = main.name || main.long_title
   config.output = path.join(config.output, legalize(name || ''));
   fs.ensureDirSync(config.output);
-  console.log('\n    Download folder: %s\n', config.output);
-	console.log('\n    Downloading: %s\n', name);
+  console.log('\n    Download folder:', config.output);
+	console.log('\n    Downloading:', name);
   // TODO: Make PDF chunks instead of single pdf. The name pdf should contain chapters ranges
 	if(config.pdf) config.pdf.pipe(fs.createWriteStream( pj(config.output, `${name}.pdf`) ))
 	if(manga.isSeries && (main.type == 'Series' || main.type == 'Anthology' || main.type == 'Author')){
@@ -88,17 +89,25 @@ async function parseManga(manga) {
 		return new Promise(async resolve => {
 			let chapter = fetched ? input : JSON.parse(await get(input)), pbar;
       const title = chapterTitle || chapter.long_title;
-			console.log('\t> (%d/%d) %s', current + 1, length, title)
-			if(!config.pdf) mkdir(pj( config.output, legalize(title)))
-			pbar = newProgress(chapter.pages.length) //doesnt really need to be verbosed, actually useful
+      const folderPath = pj(config.output, legalize(title));
+
+			console.log('\t> (%d/%d) %s', current + 1, length, title);
+
+      if (!config.reDownloadChapter && !checkDownloadedChapter(chapter, folderPath)) {
+        console.log(`\tSkip downloading chapter ${title} because it's already downloaded`);
+        return resolve();
+      }
+
+      if (!config.pdf) fs.ensureDirSync(folderPath);
+
+      pbar = newProgress(chapter.pages.length) //doesnt really need to be verbosed, actually useful
 			for(var y = 0; y < chapter.pages.length; y++){
 				let imageURL = BASEURL+chapter.pages[y].url;
 				if(config.pdf){
 					await addPDFpage(imageURL, config.pdf)
 				}else{
 					await stream(imageURL, pj(
-						config.output,
-						legalize(title),
+						folderPath,
 						path.basename(imageURL)
 					))
 				}
@@ -178,6 +187,7 @@ function convertImage(buffer){
 function get(url){
 	return new Promise((resolve, reject) => {
 		https.get(url, res => {
+      console.log('\n'); // Need to new line
 			let length = parseInt(res.headers['content-length']),
 				lengthKnown = isNaN(length),
 				pbar = config.verbose ? newProgress(lengthKnown ? 1 : length, `GET: ${url}`) : null
@@ -196,6 +206,29 @@ function get(url){
 // some OS (eg. Windows) don't like them in the path name, so they throw a tantrum
 function legalize(text = '', replacer = ''){
 	return text.replace(/\\|\/|:|\*|\?|"|<|>/g, replacer)
+}
+
+// TODO: Function that check if chapter donwloaded
+// Downloaded will be load using fs.readdirSync
+function checkDownloadedChapter(chapterInfo, folderPath) {
+  try {
+    const downloadedPages = fs.readdirSync(folderPath);
+
+    // Don't Download when no pages for chapter
+    if (!chapterInfo || !chapterInfo.pages || chapterInfo.pages.length <= 0) {
+      return false;
+    }
+
+    // Download when no downloaded pages
+    if (!downloadedPages || downloadedPages.length <= 0 || chapterInfo.pages.length !== downloadedPages.length) {
+      return true;
+    }
+
+    return false;
+  } catch (e) {
+    // Return true so we download the chapter
+    return true;
+  }
 }
 
 // TODO: Try to save PDF but not work as expected
