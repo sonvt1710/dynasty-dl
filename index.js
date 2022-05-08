@@ -86,7 +86,7 @@ async function parseManga(manga) {
 		return new Promise(async resolve => {
 			let chapter = fetched ? input : JSON.parse(await get(input)), pbar;
       const title = chapterTitle || chapter.long_title;
-			console.log('\t> (%d/%d) %s', current, length, title)
+			console.log('\t> (%d/%d) %s', current + 1, length, title)
 			if(!config.pdf) mkdir(pj( config.output, legalize(title)))
 			pbar = newProgress(chapter.pages.length) //doesnt really need to be verbosed, actually useful
 			for(var y = 0; y < chapter.pages.length; y++){
