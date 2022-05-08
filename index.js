@@ -2,7 +2,7 @@ const BASEURL = 'https://dynasty-scans.com/'
 const CHAPTER_PERMA = 'https://dynasty-scans.com/chapters/'
 const JSON_APPENDIX = '.json'
 
-const fs = require('fs')
+const fs = require('fs-extra')
 const https = require('https')
 const mkdir = require('mkdirp').sync
 const path = require('path')
@@ -47,6 +47,8 @@ parseManga({
 async function parseManga(manga) {
 	let initialJSON = await get(manga.url + JSON_APPENDIX)
 	let main = JSON.parse(initialJSON), name = main.name || main.long_title
+  config.output = path.join(config.output, legalize(name || ''));
+  console.log('\n    Download folder: %s\n', config.output);
 	console.log('\n    Downloading: %s\n', name)
 	if(config.pdf) config.pdf.pipe(fs.createWriteStream( pj(config.output, `${name}.pdf`) ))
 	if(manga.isSeries && (main.type == 'Series' || main.type == 'Anthology' || main.type == 'Author')){
@@ -72,19 +74,20 @@ async function parseManga(manga) {
 				main.taggings = main.taggings.slice(selection[0], parseInt(selection[1])+1)
 		}
 		for(var i = 0; i < main.taggings.length; i++){
-			await getChapter(CHAPTER_PERMA + main.taggings[i].permalink + JSON_APPENDIX, false, i, main.taggings.length)
+			await getChapter(CHAPTER_PERMA + main.taggings[i].permalink + JSON_APPENDIX, main.taggings[i].title, false, i, main.taggings.length)
 		}
 	}else{
-		await getChapter(main, true)
+		await getChapter(main, main.long_title, true)
 	}
 	if(config.pdf) config.pdf.end()
 	
 
-	async function getChapter(input, fetched = false, current = 0, length = 1){
+	async function getChapter(input, chapterTitle, fetched = false, current = 0, length = 1){
 		return new Promise(async resolve => {
-			let chapter = fetched ? input : JSON.parse(await get(input)), pbar
-			console.log('\t> (%d/%d) %s', current, length, chapter.long_title)
-			if(!config.pdf) mkdir(pj( config.output, legalize(input.name || ''), legalize(chapter.long_title)))
+			let chapter = fetched ? input : JSON.parse(await get(input)), pbar;
+      const title = chapterTitle || chapter.long_title;
+			console.log('\t> (%d/%d) %s', current, length, title)
+			if(!config.pdf) mkdir(pj( config.output, legalize(title)))
 			pbar = newProgress(chapter.pages.length) //doesnt really need to be verbosed, actually useful
 			for(var y = 0; y < chapter.pages.length; y++){
 				let imageURL = BASEURL+chapter.pages[y].url;
@@ -93,8 +96,7 @@ async function parseManga(manga) {
 				}else{
 					await stream(imageURL, pj(
 						config.output,
-						legalize(input.name || ''),
-						legalize(chapter.long_title),
+						legalize(title),
 						path.basename(imageURL)
 					))
 				}
@@ -190,6 +192,6 @@ function get(url){
 }
 
 // some OS (eg. Windows) don't like them in the path name, so they throw a tantrum
-function legalize(text, replacer = ''){
+function legalize(text = '', replacer = ''){
 	return text.replace(/\\|\/|:|\*|\?|"|<|>/g, replacer)
 }
