@@ -48,8 +48,10 @@ async function parseManga(manga) {
 	let initialJSON = await get(manga.url + JSON_APPENDIX)
 	let main = JSON.parse(initialJSON), name = main.name || main.long_title
   config.output = path.join(config.output, legalize(name || ''));
+  fs.ensureDirSync(config.output);
   console.log('\n    Download folder: %s\n', config.output);
-	console.log('\n    Downloading: %s\n', name)
+	console.log('\n    Downloading: %s\n', name);
+  // TODO: Make PDF chunks instead of single pdf. The name pdf should contain chapters ranges
 	if(config.pdf) config.pdf.pipe(fs.createWriteStream( pj(config.output, `${name}.pdf`) ))
 	if(manga.isSeries && (main.type == 'Series' || main.type == 'Anthology' || main.type == 'Author')){
 		if(argv.listChapters){
@@ -195,3 +197,34 @@ function get(url){
 function legalize(text = '', replacer = ''){
 	return text.replace(/\\|\/|:|\*|\?|"|<|>/g, replacer)
 }
+
+// TODO: Try to save PDF but not work as expected
+function savePDFFile(cb) {
+  if (config.pdf && typeof config.pdf.end === "function") {
+    config.pdf.end();
+  }
+}
+
+function handleExit(signal = 0) {
+  console.log('\nSIGNAL:', signal);
+  savePDFFile();
+  process.exit();
+}
+
+['exit', 'SIGINT', 'SIGUSR1', 'SIGUSR2', 'uncaughtException', 'SIGTERM'].forEach((eventType) => {
+  process.on(eventType, handleExit);
+})
+
+// catches ctrl+c event
+// process.on('SIGINT', (signal) => {
+//   handleExit(signal);
+// });
+
+// process.on('SIGTERM', handleExit);
+
+// catches "kill pid" (for example: nodemon restart)
+// process.on('SIGUSR1', handleExit);
+// process.on('SIGUSR2', handleExit);
+
+// do something when app is closing
+// process.on('exit', handleExit);
