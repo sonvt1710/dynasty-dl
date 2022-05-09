@@ -48,7 +48,7 @@ parseManga({
 async function parseManga(manga) {
 	let initialJSON = await get(manga.url + JSON_APPENDIX)
 	let main = JSON.parse(initialJSON), name = main.name || main.long_title
-  config.output = path.join(config.output, legalize(name || ''));
+  config.output = pj(config.output, 'mangas', legalize(name || ''));
   fs.ensureDirSync(config.output);
   console.log('\n    Download folder:', config.output);
 	console.log('\n    Downloading:', name);
@@ -205,7 +205,7 @@ function get(url){
 
 // some OS (eg. Windows) don't like them in the path name, so they throw a tantrum
 function legalize(text = '', replacer = ''){
-	return text.replace(/\\|\/|:|\*|\?|"|<|>/g, replacer)
+	return text.trim().replace(/\\|\/|:|\*|\?|"|<|>|'|,/g, replacer)
 }
 
 // TODO: Function that check if chapter donwloaded
